@@ -1,0 +1,2 @@
+-R theories/ ThreeValued
+theories/three_valued.v
