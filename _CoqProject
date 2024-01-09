@@ -1,2 +1,3 @@
 -R theories/ ThreeValued
-theories/three_valued.v
+theories/bool3.v
+theories/good_bad.v

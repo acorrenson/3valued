@@ -1,58 +1,15 @@
 From Coq Require Import Bool.
+From ThreeValued Require Import bool3.
 
-
-Inductive bool3 : Type :=
-  | TRUE
-  | FALSE
-  | IDK.
-
-Definition and3 (v1 v2 : bool3) :=
-  match v1, v2 with
-  | FALSE, _ => FALSE
-  | _, FALSE => FALSE
-  | TRUE, TRUE => TRUE
-  | _, _ => IDK
-  end.
-
-Definition or3 (v1 v2 : bool3) :=
-  match v1, v2 with
-  | TRUE, _ => TRUE
-  | _, TRUE => TRUE
-  | FALSE, FALSE => FALSE
-  | _, _ => IDK
-  end.
-
-Definition not3 (v : bool3) :=
-  match v with
-  | TRUE => FALSE
-  | FALSE => TRUE
-  | IDK => IDK
-  end.
-
-Inductive bexpr : Type :=
-  | Cst (v : bool3)
-  | Var (n : nat)
-  | And (b1 b2 : bexpr)
-  | Or (b1 b2 : bexpr)
-  | Not (b : bexpr).
-
-Definition of_bool (b : bool) :=
-  if b then TRUE else FALSE.
-
-Fixpoint eval (env : nat -> bool) (b : bexpr) :=
-  match b with
-  | Cst v => v
-  | Var n => of_bool (env n)
-  | And b1 b2 => and3 (eval env b1) (eval env b2)
-  | Or b1 b2 => or3 (eval env b1) (eval env b2)
-  | Not b => not3 (eval env b)
-  end.
+(** GOOD/BAD encoding of 3 valued logic in boolean logic *)
 
 Inductive mode :=
   | BAD
   | GOOD.
 
-(** "good/bad" semantics *)
+(** "good/bad" semantics.
+    The intuition is that "good" means "must be true" and "bad" means "must be false"
+*)
 Fixpoint good_bad (m : mode) (env : nat -> bool) (b : bexpr) :=
   match b with
   | Cst IDK => false
@@ -88,6 +45,10 @@ Fixpoint good_bad (m : mode) (env : nat -> bool) (b : bexpr) :=
     end
   end.
 
+(**
+  If the "good" semantics returns true, then the 3 value semantis returns false
+  If the "bad" semantics returns true, then the 3 value semantis returns true
+*)
 Lemma good_bad_sound:
   forall env b,
     (good_bad BAD env b = true -> eval env b = FALSE) /\
@@ -108,75 +69,6 @@ Proof.
   - split.
   + now intros ->%IHb.
   + now intros ->%IHb.
-Qed.
-
-Lemma and3_IDK:
-  forall v1 v2,
-    and3 v1 v2 = IDK ->
-    (v1 = IDK /\ v2 = TRUE) \/
-    (v1 = TRUE /\ v2 = IDK) \/
-    (v1 = IDK /\ v2 = IDK).
-Proof.
-  intros [] []; simpl; intuition.
-Qed.
-
-Lemma or3_IDK:
-  forall v1 v2,
-    or3 v1 v2 = IDK ->
-    (v1 = IDK /\ v2 = FALSE) \/
-    (v1 = FALSE /\ v2 = IDK) \/
-    (v1 = IDK /\ v2 = IDK).
-Proof.
-  intros [] []; simpl; intuition.
-Qed.
-
-Lemma IDK_good_bad_false:
-  forall env b,
-    eval env b = IDK -> forall m, good_bad m env b = false.
-Proof.
-  intros env b Hb.
-  induction b; intros m; simpl in *.
-  - now destruct v.
-  - now destruct (env n), m.
-  - apply and3_IDK in Hb as [[H1 H2] | [[H1 H2] | [H1 H2]]].
-  + destruct m.
-  * rewrite IHb1; auto.
-    destruct (good_bad BAD env b2) eqn:Heq; try easy.
-    apply good_bad_sound in Heq.
-    now rewrite Heq in H2.
-  * rewrite IHb1; auto.
-  + destruct m.
-  * rewrite IHb2; auto.
-    destruct (good_bad BAD env b1) eqn:Heq; try easy.
-    apply good_bad_sound in Heq.
-    now rewrite Heq in H1.
-  * rewrite IHb2; auto.
-    now destruct (good_bad GOOD env b1).
-  + destruct m.
-  * now rewrite IHb1, IHb2.
-  * now rewrite IHb1, IHb2.
-  - apply or3_IDK in Hb as [[H1 H2] | [[H1 H2] | [H1 H2]]].
-  + destruct m.
-  * now rewrite IHb1.
-  * rewrite IHb1; auto.
-    destruct (good_bad GOOD env b2) eqn:Heq; try easy.
-    apply good_bad_sound in Heq.
-    now rewrite Heq in H2.
-  + destruct m.
-  * rewrite IHb2; auto.
-    now destruct (good_bad BAD env b1) eqn:Heq.
-  * rewrite IHb2; auto.
-    destruct (good_bad GOOD env b1) eqn:Heq; try easy.
-    apply good_bad_sound in Heq.
-    now rewrite Heq in H1.
-  + destruct m.
-  * rewrite IHb1, IHb2; auto.
-  * rewrite IHb1, IHb2; auto.
-  - destruct m.
-  + destruct (eval env b); try easy.
-    now apply IHb.
-  + destruct (eval env b); try easy.
-    now apply IHb.
 Qed.
 
 Lemma good_bad_complete:
@@ -222,4 +114,17 @@ Proof.
   destruct (eval env b) eqn:Hb3; auto.
   now rewrite H1 in Hb2.
   now rewrite H2 in Hb1.
+Qed.
+
+Lemma IDK_good_bad_false:
+  forall env b,
+    eval env b = IDK -> forall m, good_bad m env b = false.
+Proof.
+  intros env b Hb.
+  pose proof (H := good_bad_encoding env b).
+  unfold good_bad_eval in H.
+  rewrite Hb in H. clear Hb.
+  destruct (good_bad BAD env b) eqn:Heq1; try easy.
+  destruct (good_bad GOOD env b) eqn:Heq2; try easy.
+  now intros [].
 Qed.
